@@ -3,15 +3,16 @@ require("dotenv").config();
 var express = require("express");
 var ejs = require("ejs");
 var bodyParser = require("body-parser");
-var mysql = require("mysql");
+var { Pool } = require("pg");
 var session = require("express-session");
 var app = express();
 
-mysql.createConnection({
+const pool = new Pool({
     host: process.env.DB_HOST || "localhost",
-    user: process.env.DB_USER || "root",
+    user: process.env.DB_USER || "postgres",
     password: process.env.DB_PASSWORD || "",
     database: process.env.DB_NAME || "node",
+    port: process.env.DB_PORT || 5432,
 });
 
 app.use(express.static("public"));
@@ -72,19 +73,12 @@ async function getPaypalAccessToken() {
 }
 
 app.get("/", function (req, res) {
-    var con = mysql.createConnection({
-        host: "localhost",
-        user: "root",
-        password: "",
-        database: "node",
-    });
-
-    con.query("SELECT * FROM products", (err, result) => {
+    pool.query("SELECT * FROM products", (err, result) => {
         if (err) {
             console.error("Database error:", err);
             return res.render("pages/index", { result: [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
         }
-        res.render("pages/index", { result: result || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+        res.render("pages/index", { result: result.rows || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
     });
 });
 
@@ -192,13 +186,6 @@ app.post("/place_order", function (req, res) {
 
     req.session.order_id = id;
 
-    var con = mysql.createConnection({
-        host: "localhost",
-        user: "root",
-        password: "",
-        database: "node",
-    });
-
     var cart = req.session.cart;
 
     if (!cart || cart.length === 0) {
@@ -209,61 +196,50 @@ app.post("/place_order", function (req, res) {
         product_ids = product_ids + "," + cart[i].id;
     }
 
-    con.connect((err) => {
+    var query =
+        "INSERT INTO orders (id,cost, name, email,status,city ,address,phone,date,product_ids) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)";
+    var values = [
+        id,
+        cost,
+        name,
+        email,
+        status,
+        city,
+        address,
+        phone,
+        date,
+        product_ids,
+    ];
+
+    pool.query(query, values, (err, result) => {
         if (err) {
-            console.error("Database connection error:", err);
+            console.error("Database error:", err);
             return res.redirect("/checkout");
-        } else {
+        }
+
+        var order_id = id;
+
+        for (let i = 0; i < cart.length; i++) {
             var query =
-                "INSERT INTO orders (id,cost, name, email,status,city ,address,phone,date,product_ids) VALUES ?";
+                "INSERT INTO order_items (order_id, product_id,product_name, product_price, product_image, product_quantity,order_date) VALUES ($1, $2, $3, $4, $5, $6, $7)";
             var values = [
-                [
-                    id,
-                    cost,
-                    name,
-                    email,
-                    status,
-                    city,
-                    address,
-                    phone,
-                    date,
-                    product_ids,
-                ],
+                order_id,
+                cart[i].id,
+                cart[i].name,
+                cart[i].price,
+                cart[i].image,
+                cart[i].quantity,
+                new Date(),
             ];
 
-            con.query(query, [values], (err, result) => {
+            pool.query(query, values, (err, result) => {
                 if (err) {
                     console.error("Database error:", err);
-                    return res.redirect("/checkout");
                 }
-
-                var order_id = id;
-
-                for (let i = 0; i < cart.length; i++) {
-                    var query =
-                        "INSERT INTO order_items (order_id, product_id,product_name, product_price, product_image, product_quantity,order_date) VALUES ?";
-                    var values = [
-                        [
-                            order_id,
-                            cart[i].id,
-                            cart[i].name,
-                            cart[i].price,
-                            cart[i].image,
-                            cart[i].quantity,
-                            new Date(),
-                        ],
-                    ];
-
-                    con.query(query, [values], (err, result) => {
-                        if (err) {
-                            console.error("Database error:", err);
-                        }
-                    });
-                }
-
-                res.redirect("/payment");
             });
         }
+
+        res.redirect("/payment");
     });
 });
 
@@ -334,17 +310,10 @@ app.post("/api/orders/:orderID/capture", async function (req, res) {
         var data = await response.json();
 
         if (data.status == "COMPLETED") {
-            var con = mysql.createConnection({
-                host: "localhost",
-                user: "root",
-                password: "",
-                database: "node",
-            });
-
-            var query = "UPDATE orders SET status = ? WHERE id = ?";
-            con.query(query, ["paid", req.session.order_id], (err, result) => {
+            var query = "UPDATE orders SET status = $1 WHERE id = $2";
+            pool.query(query, ["paid", req.session.order_id], (err, result) => {
                 if (err) {
-                    console.log(err);
+                    console.error("Database error:", err);
                 }
             });
         }
@@ -366,42 +335,28 @@ app.get("/verify_payment", function (req, res) {
     var transaction_id = req.query.transaction_id;
     var order_id = req.session.order_id;
 
-    var con = mysql.createConnection({
-        host: "localhost",
-        user: "root",
-        password: "",
-        database: "node",
-    });
+    var query =
+        "INSERT INTO payments (order_id, transaction_id, date) VALUES ($1, $2, $3)";
 
-    con.connect((err) => {
+    var values = [order_id, transaction_id, new Date()];
+
+    pool.query(query, values, (err, result) => {
         if (err) {
-            console.error("Database connection error:", err);
+            console.error("Database error:", err);
             return res.redirect("/thank_you");
         }
 
-        var query =
-            "INSERT INTO payments (order_id, transaction_id, date) VALUES ?";
+        pool.query(
+            "UPDATE orders SET status = $1 WHERE id = $2",
+            ["paid", order_id],
+            (err, result) => {
+                if (err) {
+                    console.error("Database error:", err);
+                }
 
-        var values = [[order_id, transaction_id, new Date()]];
-
-        con.query(query, [values], (err, result) => {
-            if (err) {
-                console.error("Database error:", err);
-                return res.redirect("/thank_you");
-            }
-
-            con.query(
-                "UPDATE orders SET status = ? WHERE id = ?",
-                ["paid", order_id],
-                (err, result) => {
-                    if (err) {
-                        console.error("Database error:", err);
-                    }
-
-                    res.redirect("/thank_you");
-                },
-            );
-        });
+                res.redirect("/thank_you");
+            },
+        );
     });
 });
 
@@ -413,36 +368,22 @@ app.get("/thank_you", function (req, res) {
 app.get("/single_product", function (req, res) {
     var id = req.query.id;
 
-    var con = mysql.createConnection({
-        host: "localhost",
-        user: "root",
-        password: "",
-        database: "node",
-    });
-
-    con.query("SELECT * FROM products WHERE id = ?", [id], (err, result) => {
+    pool.query("SELECT * FROM products WHERE id = $1", [id], (err, result) => {
         if (err) {
             console.error("Database error:", err);
             return res.render("pages/single_product", { result: [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
         }
-        res.render("pages/single_product", { result: result || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+        res.render("pages/single_product", { result: result.rows || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
     });
 });
 
 app.get("/products", function (req, res) {
-    var con = mysql.createConnection({
-        host: "localhost",
-        user: "root",
-        password: "",
-        database: "node",
-    });
-
-    con.query("SELECT * FROM products", (err, result) => {
+    pool.query("SELECT * FROM products", (err, result) => {
         if (err) {
             console.error("Database error:", err);
             return res.render("pages/products", { result: [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
         }
-        res.render("pages/products", { result: result || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+        res.render("pages/products", { result: result.rows || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
     });
 });
 
