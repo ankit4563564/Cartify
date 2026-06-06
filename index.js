@@ -119,7 +119,7 @@ app.get("/cart", function (req, res) {
     var cart = req.session.cart || [];
     var total = req.session.total || 0;
 
-    res.render("pages/cart", { cart: cart, total: total });
+    res.render("pages/cart", { cart: cart, total: total, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
 app.post("/remove_product", function (req, res) {
@@ -171,7 +171,7 @@ app.post("/edit_product_quantity", function (req, res) {
 app.get("/checkout", function (req, res) {
     var total = req.session.total;
 
-    res.render("pages/checkout", { total: total });
+    res.render("pages/checkout", { total: total, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
 app.post("/place_order", function (req, res) {
@@ -264,7 +264,7 @@ app.post("/place_order", function (req, res) {
 
 app.get("/payment", function (req, res) {
     var total = req.session.total;
-    res.render("pages/payment", { total: total });
+    res.render("pages/payment", { total: total, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
 app.post("/api/orders", async function (req, res) {
@@ -402,7 +402,7 @@ app.get("/verify_payment", function (req, res) {
 
 app.get("/thank_you", function (req, res) {
     var order_id = req.session.order_id;
-    res.render("pages/thank_you", { order_id });
+    res.render("pages/thank_you", { order_id, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
 app.get("/single_product", function (req, res) {
@@ -416,7 +416,7 @@ app.get("/single_product", function (req, res) {
     });
 
     con.query("SELECT * FROM products WHERE id = ?", [id], (err, result) => {
-        res.render("pages/single_product", { result: result });
+        res.render("pages/single_product", { result: result, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
     });
 });
 
@@ -429,10 +429,10 @@ app.get("/products", function (req, res) {
     });
 
     con.query("SELECT * FROM products", (err, result) => {
-        res.render("pages/products", { result: result });
+        res.render("pages/products", { result: result, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
     });
 });
 
 app.get("/about", function (req, res) {
-    res.render("pages/about");
+    res.render("pages/about", { googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
