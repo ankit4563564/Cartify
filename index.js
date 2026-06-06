@@ -3,16 +3,15 @@ require("dotenv").config();
 var express = require("express");
 var ejs = require("ejs");
 var bodyParser = require("body-parser");
-var { Pool } = require("pg");
+var mysql = require("mysql");
 var session = require("express-session");
 var app = express();
 
-const pool = new Pool({
-    host: process.env.DB_HOST || "localhost",
-    user: process.env.DB_USER || "postgres",
-    password: process.env.DB_PASSWORD || "",
-    database: process.env.DB_NAME || "node",
-    port: process.env.DB_PORT || 5432,
+mysql.createConnection({
+    host: "localhost",
+    user: "root",
+    password: "",
+    database: "node",
 });
 
 app.use(express.static("public"));
@@ -73,25 +72,15 @@ async function getPaypalAccessToken() {
 }
 
 app.get("/", function (req, res) {
-    // Mock data for testing without database
-    const mockProducts = [
-        { id: 1, name: 'Delicious Pizza', price: 12.99, sale_price: 10.99, image: 'f1.png', category: 'pizza' },
-        { id: 2, name: 'Burger Special', price: 8.99, sale_price: 7.99, image: 'f2.png', category: 'burger' },
-        { id: 3, name: 'Pasta Delight', price: 15.99, sale_price: 13.99, image: 'f3.png', category: 'pasta' },
-        { id: 4, name: 'Fresh Salad', price: 9.99, sale_price: 8.99, image: 'f4.png', category: 'salad' },
-        { id: 5, name: 'Tasty Tacos', price: 11.99, sale_price: 9.99, image: 'f5.png', category: 'mexican' },
-        { id: 6, name: 'Grilled Chicken', price: 14.99, sale_price: 12.99, image: 'f6.png', category: 'chicken' },
-        { id: 7, name: 'Seafood Platter', price: 18.99, sale_price: 15.99, image: 'f7.png', category: 'seafood' },
-        { id: 8, name: 'Vegetarian Wrap', price: 10.99, sale_price: 9.99, image: 'f8.png', category: 'vegetarian' },
-        { id: 9, name: 'Dessert Special', price: 7.99, sale_price: 6.99, image: 'f9.png', category: 'dessert' }
-    ];
+    var con = mysql.createConnection({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: "node",
+    });
 
-    pool.query("SELECT * FROM products", (err, result) => {
-        if (err) {
-            console.error("Database error, using mock data:", err);
-            return res.render("pages/index", { result: mockProducts, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
-        }
-        res.render("pages/index", { result: result.rows || mockProducts, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+    con.query("SELECT * FROM products", (err, result) => {
+        res.render("pages/index", { result: result });
     });
 });
 
@@ -130,7 +119,7 @@ app.get("/cart", function (req, res) {
     var cart = req.session.cart || [];
     var total = req.session.total || 0;
 
-    res.render("pages/cart", { cart: cart, total: total, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+    res.render("pages/cart", { cart: cart, total: total });
 });
 
 app.post("/remove_product", function (req, res) {
@@ -182,7 +171,7 @@ app.post("/edit_product_quantity", function (req, res) {
 app.get("/checkout", function (req, res) {
     var total = req.session.total;
 
-    res.render("pages/checkout", { total: total, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+    res.render("pages/checkout", { total: total });
 });
 
 app.post("/place_order", function (req, res) {
@@ -199,6 +188,13 @@ app.post("/place_order", function (req, res) {
 
     req.session.order_id = id;
 
+    var con = mysql.createConnection({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: "node",
+    });
+
     var cart = req.session.cart;
 
     if (!cart || cart.length === 0) {
@@ -209,56 +205,66 @@ app.post("/place_order", function (req, res) {
         product_ids = product_ids + "," + cart[i].id;
     }
 
-    var query =
-        "INSERT INTO orders (id,cost, name, email,status,city ,address,phone,date,product_ids) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)";
-    var values = [
-        id,
-        cost,
-        name,
-        email,
-        status,
-        city,
-        address,
-        phone,
-        date,
-        product_ids,
-    ];
-
-    pool.query(query, values, (err, result) => {
+    con.connect((err) => {
         if (err) {
-            console.error("Database error:", err);
-            return res.redirect("/checkout");
-        }
-
-        var order_id = id;
-
-        for (let i = 0; i < cart.length; i++) {
+            console.log(err);
+        } else {
             var query =
-                "INSERT INTO order_items (order_id, product_id,product_name, product_price, product_image, product_quantity,order_date) VALUES ($1, $2, $3, $4, $5, $6, $7)";
+                "INSERT INTO orders (id,cost, name, email,status,city ,address,phone,date,product_ids) VALUES ?";
             var values = [
-                order_id,
-                cart[i].id,
-                cart[i].name,
-                cart[i].price,
-                cart[i].image,
-                cart[i].quantity,
-                new Date(),
+                [
+                    id,
+                    cost,
+                    name,
+                    email,
+                    status,
+                    city,
+                    address,
+                    phone,
+                    date,
+                    product_ids,
+                ],
             ];
 
-            pool.query(query, values, (err, result) => {
+            con.query(query, [values], (err, result) => {
                 if (err) {
-                    console.error("Database error:", err);
+                    console.log(err);
+                    return res.redirect("/checkout");
                 }
+
+                var order_id = id;
+
+                for (let i = 0; i < cart.length; i++) {
+                    var query =
+                        "INSERT INTO order_items (order_id, product_id,product_name, product_price, product_image, product_quantity,order_date) VALUES ?";
+                    var values = [
+                        [
+                            order_id,
+                            cart[i].id,
+                            cart[i].name,
+                            cart[i].price,
+                            cart[i].image,
+                            cart[i].quantity,
+                            new Date(),
+                        ],
+                    ];
+
+                    con.query(query, [values], (err, result) => {
+                        if (err) {
+                            console.log(err);
+                        }
+                    });
+                }
+
+                res.redirect("/payment");
             });
         }
-
-        res.redirect("/payment");
     });
 });
 
 app.get("/payment", function (req, res) {
     var total = req.session.total;
-    res.render("pages/payment", { total: total, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+    res.render("pages/payment", { total: total });
 });
 
 app.post("/api/orders", async function (req, res) {
@@ -323,17 +329,24 @@ app.post("/api/orders/:orderID/capture", async function (req, res) {
         var data = await response.json();
 
         if (data.status == "COMPLETED") {
-            var query = "UPDATE orders SET status = $1 WHERE id = $2";
-            pool.query(query, ["paid", req.session.order_id], (err, result) => {
+            var con = mysql.createConnection({
+                host: "localhost",
+                user: "root",
+                password: "",
+                database: "node",
+            });
+
+            var query = "UPDATE orders SET status = ? WHERE id = ?";
+            con.query(query, ["paid", req.session.order_id], (err, result) => {
                 if (err) {
-                    console.error("Database error:", err);
+                    console.log(err);
                 }
             });
         }
 
         res.status(response.status).json(data);
     } catch (error) {
-        console.error("PayPal capture error:", error);
+        console.log(error);
         res.status(500).json({ error: "Failed to capture PayPal order" });
     }
 });
@@ -348,85 +361,78 @@ app.get("/verify_payment", function (req, res) {
     var transaction_id = req.query.transaction_id;
     var order_id = req.session.order_id;
 
-    var query =
-        "INSERT INTO payments (order_id, transaction_id, date) VALUES ($1, $2, $3)";
+    var con = mysql.createConnection({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: "node",
+    });
 
-    var values = [order_id, transaction_id, new Date()];
-
-    pool.query(query, values, (err, result) => {
+    con.connect((err) => {
         if (err) {
-            console.error("Database error:", err);
+            console.log(err);
             return res.redirect("/thank_you");
         }
 
-        pool.query(
-            "UPDATE orders SET status = $1 WHERE id = $2",
-            ["paid", order_id],
-            (err, result) => {
-                if (err) {
-                    console.error("Database error:", err);
-                }
+        var query =
+            "INSERT INTO payments (order_id, transaction_id, date) VALUES ?";
 
-                res.redirect("/thank_you");
-            },
-        );
+        var values = [[order_id, transaction_id, new Date()]];
+
+        con.query(query, [values], (err, result) => {
+            if (err) {
+                console.log(err);
+                return res.redirect("/thank_you");
+            }
+
+            con.query(
+                "UPDATE orders SET status = ? WHERE id = ?",
+                ["paid", order_id],
+                (err, result) => {
+                    if (err) {
+                        console.log(err);
+                    }
+
+                    res.redirect("/thank_you");
+                },
+            );
+        });
     });
 });
 
 app.get("/thank_you", function (req, res) {
     var order_id = req.session.order_id;
-    res.render("pages/thank_you", { order_id, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+    res.render("pages/thank_you", { order_id });
 });
 
 app.get("/single_product", function (req, res) {
     var id = req.query.id;
 
-    // Mock data for testing without database
-    const mockProducts = [
-        { id: 1, name: 'Delicious Pizza', price: 12.99, sale_price: 10.99, image: 'f1.png', category: 'pizza' },
-        { id: 2, name: 'Burger Special', price: 8.99, sale_price: 7.99, image: 'f2.png', category: 'burger' },
-        { id: 3, name: 'Pasta Delight', price: 15.99, sale_price: 13.99, image: 'f3.png', category: 'pasta' },
-        { id: 4, name: 'Fresh Salad', price: 9.99, sale_price: 8.99, image: 'f4.png', category: 'salad' },
-        { id: 5, name: 'Tasty Tacos', price: 11.99, sale_price: 9.99, image: 'f5.png', category: 'mexican' },
-        { id: 6, name: 'Grilled Chicken', price: 14.99, sale_price: 12.99, image: 'f6.png', category: 'chicken' },
-        { id: 7, name: 'Seafood Platter', price: 18.99, sale_price: 15.99, image: 'f7.png', category: 'seafood' },
-        { id: 8, name: 'Vegetarian Wrap', price: 10.99, sale_price: 9.99, image: 'f8.png', category: 'vegetarian' },
-        { id: 9, name: 'Dessert Special', price: 7.99, sale_price: 6.99, image: 'f9.png', category: 'dessert' }
-    ];
+    var con = mysql.createConnection({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: "node",
+    });
 
-    pool.query("SELECT * FROM products WHERE id = $1", [id], (err, result) => {
-        if (err) {
-            console.error("Database error, using mock data:", err);
-            const product = mockProducts.find(p => p.id == id) || mockProducts[0];
-            return res.render("pages/single_product", { result: [product], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
-        }
-        res.render("pages/single_product", { result: result.rows || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+    con.query("SELECT * FROM products WHERE id = ?", [id], (err, result) => {
+        res.render("pages/single_product", { result: result });
     });
 });
 
 app.get("/products", function (req, res) {
-    // Mock data for testing without database
-    const mockProducts = [
-        { id: 1, name: 'Delicious Pizza', price: 12.99, sale_price: 10.99, image: 'f1.png', category: 'pizza' },
-        { id: 2, name: 'Burger Special', price: 8.99, sale_price: 7.99, image: 'f2.png', category: 'burger' },
-        { id: 3, name: 'Pasta Delight', price: 15.99, sale_price: 13.99, image: 'f3.png', category: 'pasta' },
-        { id: 4, name: 'Fresh Salad', price: 9.99, sale_price: 8.99, image: 'f4.png', category: 'salad' },
-        { id: 5, name: 'Tasty Tacos', price: 11.99, sale_price: 9.99, image: 'f5.png', category: 'mexican' },
-        { id: 6, name: 'Grilled Chicken', price: 14.99, sale_price: 12.99, image: 'f6.png', category: 'chicken' },
-        { id: 7, name: 'Seafood Platter', price: 18.99, sale_price: 15.99, image: 'f7.png', category: 'seafood' },
-        { id: 8, name: 'Vegetarian Wrap', price: 10.99, sale_price: 9.99, image: 'f8.png', category: 'vegetarian' },
-        { id: 9, name: 'Dessert Special', price: 7.99, sale_price: 6.99, image: 'f9.png', category: 'dessert' }
-    ];
+    var con = mysql.createConnection({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: "node",
+    });
 
-    pool.query("SELECT * FROM products", (err, result) => {
-        if (err) {
-            console.error("Database error, using mock data:", err);
-            return res.render("pages/products", { result: mockProducts, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
-        }
-        res.render("pages/products", { result: result.rows || mockProducts, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+    con.query("SELECT * FROM products", (err, result) => {
+        res.render("pages/products", { result: result });
     });
 });
 
 app.get("/about", function (req, res) {
-    res.render("pages/about", { googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+    res.render("pages/about");
 });
