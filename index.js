@@ -73,12 +73,25 @@ async function getPaypalAccessToken() {
 }
 
 app.get("/", function (req, res) {
+    // Mock data for testing without database
+    const mockProducts = [
+        { id: 1, name: 'Delicious Pizza', price: 12.99, sale_price: 10.99, image: 'f1.png', category: 'pizza' },
+        { id: 2, name: 'Burger Special', price: 8.99, sale_price: 7.99, image: 'f2.png', category: 'burger' },
+        { id: 3, name: 'Pasta Delight', price: 15.99, sale_price: 13.99, image: 'f3.png', category: 'pasta' },
+        { id: 4, name: 'Fresh Salad', price: 9.99, sale_price: 8.99, image: 'f4.png', category: 'salad' },
+        { id: 5, name: 'Tasty Tacos', price: 11.99, sale_price: 9.99, image: 'f5.png', category: 'mexican' },
+        { id: 6, name: 'Grilled Chicken', price: 14.99, sale_price: 12.99, image: 'f6.png', category: 'chicken' },
+        { id: 7, name: 'Seafood Platter', price: 18.99, sale_price: 15.99, image: 'f7.png', category: 'seafood' },
+        { id: 8, name: 'Vegetarian Wrap', price: 10.99, sale_price: 9.99, image: 'f8.png', category: 'vegetarian' },
+        { id: 9, name: 'Dessert Special', price: 7.99, sale_price: 6.99, image: 'f9.png', category: 'dessert' }
+    ];
+
     pool.query("SELECT * FROM products", (err, result) => {
         if (err) {
-            console.error("Database error:", err);
-            return res.render("pages/index", { result: [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+            console.error("Database error, using mock data:", err);
+            return res.render("pages/index", { result: mockProducts, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
         }
-        res.render("pages/index", { result: result.rows || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+        res.render("pages/index", { result: result.rows || mockProducts, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
     });
 });
 
@@ -368,22 +381,49 @@ app.get("/thank_you", function (req, res) {
 app.get("/single_product", function (req, res) {
     var id = req.query.id;
 
+    // Mock data for testing without database
+    const mockProducts = [
+        { id: 1, name: 'Delicious Pizza', price: 12.99, sale_price: 10.99, image: 'f1.png', category: 'pizza' },
+        { id: 2, name: 'Burger Special', price: 8.99, sale_price: 7.99, image: 'f2.png', category: 'burger' },
+        { id: 3, name: 'Pasta Delight', price: 15.99, sale_price: 13.99, image: 'f3.png', category: 'pasta' },
+        { id: 4, name: 'Fresh Salad', price: 9.99, sale_price: 8.99, image: 'f4.png', category: 'salad' },
+        { id: 5, name: 'Tasty Tacos', price: 11.99, sale_price: 9.99, image: 'f5.png', category: 'mexican' },
+        { id: 6, name: 'Grilled Chicken', price: 14.99, sale_price: 12.99, image: 'f6.png', category: 'chicken' },
+        { id: 7, name: 'Seafood Platter', price: 18.99, sale_price: 15.99, image: 'f7.png', category: 'seafood' },
+        { id: 8, name: 'Vegetarian Wrap', price: 10.99, sale_price: 9.99, image: 'f8.png', category: 'vegetarian' },
+        { id: 9, name: 'Dessert Special', price: 7.99, sale_price: 6.99, image: 'f9.png', category: 'dessert' }
+    ];
+
     pool.query("SELECT * FROM products WHERE id = $1", [id], (err, result) => {
         if (err) {
-            console.error("Database error:", err);
-            return res.render("pages/single_product", { result: [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+            console.error("Database error, using mock data:", err);
+            const product = mockProducts.find(p => p.id == id) || mockProducts[0];
+            return res.render("pages/single_product", { result: [product], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
         }
         res.render("pages/single_product", { result: result.rows || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
     });
 });
 
 app.get("/products", function (req, res) {
+    // Mock data for testing without database
+    const mockProducts = [
+        { id: 1, name: 'Delicious Pizza', price: 12.99, sale_price: 10.99, image: 'f1.png', category: 'pizza' },
+        { id: 2, name: 'Burger Special', price: 8.99, sale_price: 7.99, image: 'f2.png', category: 'burger' },
+        { id: 3, name: 'Pasta Delight', price: 15.99, sale_price: 13.99, image: 'f3.png', category: 'pasta' },
+        { id: 4, name: 'Fresh Salad', price: 9.99, sale_price: 8.99, image: 'f4.png', category: 'salad' },
+        { id: 5, name: 'Tasty Tacos', price: 11.99, sale_price: 9.99, image: 'f5.png', category: 'mexican' },
+        { id: 6, name: 'Grilled Chicken', price: 14.99, sale_price: 12.99, image: 'f6.png', category: 'chicken' },
+        { id: 7, name: 'Seafood Platter', price: 18.99, sale_price: 15.99, image: 'f7.png', category: 'seafood' },
+        { id: 8, name: 'Vegetarian Wrap', price: 10.99, sale_price: 9.99, image: 'f8.png', category: 'vegetarian' },
+        { id: 9, name: 'Dessert Special', price: 7.99, sale_price: 6.99, image: 'f9.png', category: 'dessert' }
+    ];
+
     pool.query("SELECT * FROM products", (err, result) => {
         if (err) {
-            console.error("Database error:", err);
-            return res.render("pages/products", { result: [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+            console.error("Database error, using mock data:", err);
+            return res.render("pages/products", { result: mockProducts, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
         }
-        res.render("pages/products", { result: result.rows || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+        res.render("pages/products", { result: result.rows || mockProducts, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
     });
 });
 
