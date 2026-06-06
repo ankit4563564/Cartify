@@ -80,7 +80,11 @@ app.get("/", function (req, res) {
     });
 
     con.query("SELECT * FROM products", (err, result) => {
-        res.render("pages/index", { result: result });
+        if (err) {
+            console.error("Database error:", err);
+            return res.render("pages/index", { result: [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+        }
+        res.render("pages/index", { result: result || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
     });
 });
 
@@ -207,7 +211,8 @@ app.post("/place_order", function (req, res) {
 
     con.connect((err) => {
         if (err) {
-            console.log(err);
+            console.error("Database connection error:", err);
+            return res.redirect("/checkout");
         } else {
             var query =
                 "INSERT INTO orders (id,cost, name, email,status,city ,address,phone,date,product_ids) VALUES ?";
@@ -228,7 +233,7 @@ app.post("/place_order", function (req, res) {
 
             con.query(query, [values], (err, result) => {
                 if (err) {
-                    console.log(err);
+                    console.error("Database error:", err);
                     return res.redirect("/checkout");
                 }
 
@@ -251,7 +256,7 @@ app.post("/place_order", function (req, res) {
 
                     con.query(query, [values], (err, result) => {
                         if (err) {
-                            console.log(err);
+                            console.error("Database error:", err);
                         }
                     });
                 }
@@ -346,7 +351,7 @@ app.post("/api/orders/:orderID/capture", async function (req, res) {
 
         res.status(response.status).json(data);
     } catch (error) {
-        console.log(error);
+        console.error("PayPal capture error:", error);
         res.status(500).json({ error: "Failed to capture PayPal order" });
     }
 });
@@ -370,7 +375,7 @@ app.get("/verify_payment", function (req, res) {
 
     con.connect((err) => {
         if (err) {
-            console.log(err);
+            console.error("Database connection error:", err);
             return res.redirect("/thank_you");
         }
 
@@ -381,7 +386,7 @@ app.get("/verify_payment", function (req, res) {
 
         con.query(query, [values], (err, result) => {
             if (err) {
-                console.log(err);
+                console.error("Database error:", err);
                 return res.redirect("/thank_you");
             }
 
@@ -390,7 +395,7 @@ app.get("/verify_payment", function (req, res) {
                 ["paid", order_id],
                 (err, result) => {
                     if (err) {
-                        console.log(err);
+                        console.error("Database error:", err);
                     }
 
                     res.redirect("/thank_you");
@@ -416,7 +421,11 @@ app.get("/single_product", function (req, res) {
     });
 
     con.query("SELECT * FROM products WHERE id = ?", [id], (err, result) => {
-        res.render("pages/single_product", { result: result, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+        if (err) {
+            console.error("Database error:", err);
+            return res.render("pages/single_product", { result: [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+        }
+        res.render("pages/single_product", { result: result || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
     });
 });
 
@@ -429,7 +438,11 @@ app.get("/products", function (req, res) {
     });
 
     con.query("SELECT * FROM products", (err, result) => {
-        res.render("pages/products", { result: result, googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+        if (err) {
+            console.error("Database error:", err);
+            return res.render("pages/products", { result: [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
+        }
+        res.render("pages/products", { result: result || [], googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY });
     });
 });
 
